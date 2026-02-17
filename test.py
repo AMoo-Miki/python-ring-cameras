@@ -45,7 +45,32 @@ async def main() -> None:
 
     await ring.async_update_data()
 
-    print(ring.devices())
+    devices = ring.devices()
+    all_devices = (
+            devices.stickup_cams +
+            devices.doorbells +
+            devices.chimes +
+            devices.other
+    )
+
+    for d in all_devices:
+        if d.name == "Garage":
+            print(f"=== {d.name} ===")
+
+            # Check what methods/properties are available
+            print("\nAvailable methods/properties:")
+            for attr in dir(d):
+                if not attr.startswith('_'):
+                    print(f"  {attr}")
+
+            # Try getting history
+            print("\nHistory:")
+            history = await d.async_history(limit=10)
+            for event in history:
+                print(f"  {event}")
+
+            break
+
     await auth.async_close()
 
 
