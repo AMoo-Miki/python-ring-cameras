@@ -27,6 +27,8 @@ from ring_doorbell.const import (
     PUSH_ACTION_MOTION,
     PUSH_NOTIFICATION_KINDS,
     SUBSCRIPTION_ENDPOINT,
+    MOTION_SUBTYPES,
+    KIND_MOTION_OTHER,
 )
 from ring_doorbell.event import RingEvent, RingEventKey
 from ring_doorbell.exceptions import RingError
@@ -224,7 +226,7 @@ class RingEventListener:
         subtype = gcm_data["subtype"]
         if action.lower() == PUSH_ACTION_MOTION.lower():
             kind = KIND_MOTION
-            state = subtype
+            state = subtype if subtype in MOTION_SUBTYPES else KIND_MOTION_OTHER
         elif action.lower == PUSH_ACTION_DING.lower():
             kind = KIND_DING
             state = "ringing"
@@ -321,6 +323,11 @@ class RingEventListener:
         device = data["device"]
         event = data["event"]
         event_id = int(event["ding"]["id"])
+
+        subtype = event["ding"]["subtype"]
+        if event_kind == KIND_MOTION:
+            subtype = subtype if subtype in MOTION_SUBTYPES else KIND_MOTION_OTHER
+
         created_at = event["ding"]["created_at"]
         create_seconds = parse_datetime(created_at).timestamp()
         return RingEvent(
@@ -331,7 +338,7 @@ class RingEventListener:
             kind=event_kind,
             now=create_seconds,
             expires_in=DEFAULT_LISTEN_EVENT_EXPIRES_IN,
-            state=event["ding"]["subtype"],
+            state=subtype,
         )
 
     def _get_legacy_ring_event(self, gcm_data: dict) -> RingEvent | None:

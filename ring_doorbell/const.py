@@ -126,6 +126,11 @@ KIND_ALARM_MODE_SOME = "alarm_mode_some"
 KIND_ALARM_SIREN = "alarm_siren"
 KIND_ALARM_SILENCED = "alarm_silenced"
 
+KIND_MOTION_HUMAN = "human"
+KIND_MOTION_VEHICLE = "vehicle"
+KIND_MOTION_OTHER = "other_motion"
+MOTION_SUBTYPES = {KIND_MOTION_HUMAN, KIND_MOTION_VEHICLE}
+
 # chime test sound kinds
 CHIME_TEST_SOUND_KINDS = (KIND_DING, KIND_MOTION)
 
