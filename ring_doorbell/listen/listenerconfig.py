@@ -15,4 +15,5 @@ class RingEventListenerConfig(FcmPushClientConfig):
         config.server_heartbeat_interval = 60
         config.client_heartbeat_interval = 120
         config.monitor_interval = 15
+        config.abort_on_sequential_error_count = None
         return config
