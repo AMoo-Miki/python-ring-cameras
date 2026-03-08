@@ -227,7 +227,7 @@ class RingEventListener:
         if action.lower() == PUSH_ACTION_MOTION.lower():
             kind = KIND_MOTION
             state = subtype if subtype in MOTION_SUBTYPES else KIND_MOTION_OTHER
-        elif action.lower == PUSH_ACTION_DING.lower():
+        elif action.lower() == PUSH_ACTION_DING.lower():
             kind = KIND_DING
             state = "ringing"
         else:
