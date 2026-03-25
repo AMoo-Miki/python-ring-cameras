@@ -237,7 +237,7 @@ class RingEventListener:
         created_at = ding["created_at"]
         create_seconds = parse_datetime(created_at).timestamp()
         return RingEvent(
-            id=ding["id"],
+            id=str(ding["id"]),
             kind=kind,
             doorbot_id=ding["doorbot_id"],
             device_name=ding["device_name"],
@@ -257,7 +257,7 @@ class RingEventListener:
             self._intercom_unlock_counter[device_api_id] = 0
         self._intercom_unlock_counter[device_api_id] += 1
         return RingEvent(
-            id=self._intercom_unlock_counter[device_api_id],
+            id=str(self._intercom_unlock_counter[device_api_id]),
             kind=KIND_INTERCOM_UNLOCK,
             doorbot_id=device_api_id,
             device_name=device.name,
@@ -317,12 +317,13 @@ class RingEventListener:
             return None
 
         android_config = json.loads(android_config_str)
+        _logger.debug("Event data: %s", data_str)
         data = json.loads(data_str)
         event_category = android_config["category"]
         event_kind = PUSH_NOTIFICATION_KINDS.get(event_category, "Unknown")
         device = data["device"]
         event = data["event"]
-        event_id = int(event["ding"]["id"])
+        event_id = str(event["ding"].get("id") or event["riid"])
 
         subtype = event["ding"]["subtype"]
         if event_kind == KIND_MOTION:

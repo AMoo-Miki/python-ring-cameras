@@ -257,7 +257,7 @@ class Ring:
             re for re in self.push_dings_data if now < re.now + re.expires_in
         ]
         # Get unique id dictionary
-        alerts: dict[tuple[int, int, str], RingEvent] = {}
+        alerts: dict[tuple[int, str, str], RingEvent] = {}
         for re in self.push_dings_data:
             key = (re.doorbot_id, re.id, re.kind)
             if key not in alerts or re.now > alerts[key].now:
@@ -268,7 +268,7 @@ class Ring:
 
             if now < expires_at:
                 re = RingEvent(
-                    id=ding_data["id"],
+                    id=str(ding_data["id"]),
                     doorbot_id=ding_data["doorbot_id"],
                     device_name=ding_data["doorbot_description"],
                     device_kind=ding_data["device_kind"],

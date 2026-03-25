@@ -10,7 +10,7 @@ from typing import Any, NamedTuple
 class RingEvent:
     """Class for ring events."""
 
-    id: int
+    id: str
     doorbot_id: int
     device_name: str
     device_kind: str
@@ -39,7 +39,7 @@ class RingEventKey(NamedTuple):
     Used for determining if messages are updates to events.
     """
 
-    id: int
+    id: str
     doorbot_id: int
     kind: str
     now: float
