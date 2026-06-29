@@ -15,6 +15,7 @@ from ring_doorbell.exceptions import RingError
 from ring_doorbell.group import RingLightGroup
 from ring_doorbell.other import RingOther
 from ring_doorbell.stickup_cam import RingStickUpCam
+from ring_doorbell.util import snapshot_timestamp_to_datetime
 
 from .const import (
     API_URI,
@@ -24,10 +25,12 @@ from .const import (
     GROUPS_ENDPOINT,
     INTERCOM_KINDS,
     NEW_SESSION_ENDPOINT,
+    SNAPSHOT_TIMESTAMP_ENDPOINT,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
+    from datetime import datetime
 
     from ring_doorbell.auth import Auth
     from ring_doorbell.generic import RingGeneric
@@ -181,6 +184,40 @@ class Ring:
             json=json,
             timeout=timeout,
         )
+
+    async def async_get_snapshot_timestamps(
+        self, devices: Sequence[RingDoorBell | int]
+    ) -> dict[int, datetime | None]:
+        """Return the latest snapshot capture time for multiple devices at once.
+
+        Issues a single POST to the snapshot timestamps endpoint with all the
+        given device ids; Ring returns one entry per device. Returns a mapping
+        of device api id to the timezone-aware capture datetime, or ``None`` for
+        devices that have no Snapshot Capture frame yet. No images are
+        downloaded.
+
+        ``devices`` may be :class:`RingDoorBell` objects, their integer api ids,
+        or a mix of both. As with the per-device call, Ring treats this POST as
+        a rate-limited snapshot-refresh request (about every 30s for wired,
+        every 10 minutes for battery cameras).
+        """
+        ids = [
+            device if isinstance(device, int) else device.device_api_id
+            for device in devices
+        ]
+        result: dict[int, datetime | None] = dict.fromkeys(ids)
+        if not ids:
+            return result
+        resp = await self.async_query(
+            SNAPSHOT_TIMESTAMP_ENDPOINT, method="POST", json={"doorbot_ids": ids}
+        )
+        for entry in resp.json().get("timestamps", []):
+            device_id = entry.get("doorbot_id")
+            if device_id in result:
+                result[device_id] = snapshot_timestamp_to_datetime(
+                    entry.get("timestamp")
+                )
+        return result
 
     def devices(self) -> RingDevices:
         """Get all devices."""

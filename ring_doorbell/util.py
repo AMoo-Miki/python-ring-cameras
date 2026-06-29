@@ -59,6 +59,21 @@ def parse_datetime(datetime_str: str) -> datetime.datetime:
     return res
 
 
+def snapshot_timestamp_to_datetime(
+    timestamp_ms: float | None,
+) -> datetime.datetime | None:
+    """Convert a Ring snapshot millisecond epoch to a tz-aware datetime.
+
+    Returns ``None`` when the timestamp is missing or zero, which Ring uses to
+    indicate that no Snapshot Capture frame exists yet for the device.
+    """
+    if not timestamp_ms:
+        return None
+    return datetime.datetime.fromtimestamp(
+        timestamp_ms / 1000, tz=datetime.timezone.utc
+    )
+
+
 class _DeprecatedSyncApiHandler:
     def __init__(self, auth: Auth) -> None:
         self.auth = auth

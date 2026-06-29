@@ -51,7 +51,11 @@ from ring_doorbell.const import (
 )
 from ring_doorbell.exceptions import RingError
 from ring_doorbell.generic import RingGeneric
+from ring_doorbell.util import snapshot_timestamp_to_datetime
 from ring_doorbell.webrtcstream import RingWebRtcMessageCallback, RingWebRtcStream
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -426,6 +430,40 @@ class RingDoorBell(RingGeneric):
                     return None
                 return snapshot
         return None
+
+    async def async_get_latest_snapshot(
+        self,
+    ) -> tuple[bytes | None, datetime | None]:
+        """Return the latest stored snapshot image and its capture time.
+
+        Fetches the most recent stored Snapshot Capture frame together with the
+        timestamp Ring reports for it: one query to the snapshot timestamps
+        endpoint plus one image download.
+
+        Unlike :meth:`async_get_snapshot`, this does not loop/sleep waiting for
+        a newer frame, so the caller decides when and how often it runs. It
+        returns whatever frame is currently available, i.e. the same image
+        served as the camera snapshot/entity picture. The timestamps POST is
+        still treated by Ring as a rate-limited snapshot-refresh request (about
+        every 30s for wired, every 10 minutes for battery cameras).
+
+        Returns an ``(image, captured_at)`` tuple where ``captured_at`` is a
+        timezone-aware datetime. Both elements are ``None`` when no snapshot
+        exists yet, e.g. for battery or snapshot-only cameras, or when
+        Snapshot Capture is paused because the device is asleep or low.
+        """
+        url = SNAPSHOT_TIMESTAMP_ENDPOINT
+        payload = {"doorbot_ids": [self._attrs.get("id")]}
+        resp = await self._ring.async_query(url, method="POST", json=payload)
+        if not (timestamps := resp.json().get("timestamps")):
+            return None, None
+        captured_at = snapshot_timestamp_to_datetime(timestamps[0].get("timestamp"))
+        if captured_at is None:
+            return None, None
+        resp = await self._ring.async_query(
+            SNAPSHOT_ENDPOINT.format(self._attrs.get("id"))
+        )
+        return resp.content, captured_at
 
     def _motion_detection_state(self) -> bool | None:
         if settings := self._attrs.get("settings"):

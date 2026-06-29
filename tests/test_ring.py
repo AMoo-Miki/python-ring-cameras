@@ -84,6 +84,72 @@ async def test_doorbell_attributes(ring):
     assert dev.wifi_signal_strength == -58
 
 
+async def test_doorbell_latest_snapshot(ring, aioresponses_mock):
+    """Test fetching the latest stored snapshot and its capture time together.
+
+    This must return the currently available frame without forcing a new
+    capture, so it works even when the stored timestamp is in the past (the
+    force-refresh ``async_get_snapshot`` would loop and give up in that case).
+    """
+    dev = ring.devices()["doorbots"][0]
+    ts_url = "https://api.ring.com/clients_api/snapshots/timestamps"
+    img_url = f"https://api.ring.com/clients_api/snapshots/image/{dev.id}"
+
+    # A stored frame with a past timestamp -> both image and tz-aware datetime.
+    ts_ms = 1700000000000
+    aioresponses_mock.post(
+        ts_url,
+        payload={"timestamps": [{"doorbot_id": dev.id, "timestamp": ts_ms}]},
+    )
+    aioresponses_mock.get(img_url, body=b"latest-still-bytes")
+
+    image, captured = await dev.async_get_latest_snapshot()
+    assert image == b"latest-still-bytes"
+    assert captured == datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc)
+    assert captured is not None
+    assert captured.tzinfo is not None
+
+    # No stored snapshot yet -> (None, None) and no image request is made.
+    aioresponses_mock.post(ts_url, payload={"timestamps": []})
+    assert await dev.async_get_latest_snapshot() == (None, None)
+
+    # A zero timestamp (snapshot never captured) -> (None, None).
+    aioresponses_mock.post(
+        ts_url,
+        payload={"timestamps": [{"doorbot_id": dev.id, "timestamp": 0}]},
+    )
+    assert await dev.async_get_latest_snapshot() == (None, None)
+
+
+async def test_snapshot_timestamps_batch(ring, aioresponses_mock):
+    """Test fetching multiple cameras' capture times in a single request."""
+    ts_url = "https://api.ring.com/clients_api/snapshots/timestamps"
+    doorbell = ring.devices()["doorbots"][0]
+    shared = ring.devices()["authorized_doorbots"][0]
+
+    ts_ms = 1700000000000
+    aioresponses_mock.post(
+        ts_url,
+        payload={
+            "timestamps": [
+                {"doorbot_id": doorbell.id, "timestamp": ts_ms},
+                {"doorbot_id": shared.id, "timestamp": 0},
+            ]
+        },
+    )
+    # Accepts device objects and plain ids mixed; an id with no entry -> None,
+    # a zero timestamp -> None, a valid epoch -> tz-aware datetime.
+    result = await ring.async_get_snapshot_timestamps([doorbell, shared.id, 99999])
+    assert result == {
+        doorbell.id: datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc),
+        shared.id: None,
+        99999: None,
+    }
+
+    # Empty input makes no request and returns an empty mapping.
+    assert await ring.async_get_snapshot_timestamps([]) == {}
+
+
 def test_shared_doorbell_attributes(ring):
     data = ring.devices()
     dev = data["authorized_doorbots"][0]
