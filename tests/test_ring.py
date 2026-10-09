@@ -90,6 +90,35 @@ async def test_doorbell_attributes(ring):
     assert dev.wifi_signal_strength == -58
 
 
+async def test_snapshot_timestamps_batch(ring, aioresponses_mock):
+    """Test fetching multiple cameras' capture times in a single request."""
+    ts_url = "https://api.ring.com/clients_api/snapshots/timestamps"
+    doorbell = ring.devices()["doorbots"][0]
+    shared = ring.devices()["authorized_doorbots"][0]
+
+    ts_ms = 1700000000000
+    aioresponses_mock.post(
+        ts_url,
+        payload={
+            "timestamps": [
+                {"doorbot_id": doorbell.id, "timestamp": ts_ms},
+                {"doorbot_id": shared.id, "timestamp": 0},
+            ]
+        },
+    )
+    # Accepts device objects and plain ids mixed; an id with no entry -> None,
+    # a zero timestamp -> None, a valid epoch -> tz-aware datetime.
+    result = await ring.async_get_snapshot_timestamps([doorbell, shared.id, 99999])
+    assert result == {
+        doorbell.id: datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc),
+        shared.id: None,
+        99999: None,
+    }
+
+    # Empty input makes no request and returns an empty mapping.
+    assert await ring.async_get_snapshot_timestamps([]) == {}
+
+
 def test_shared_doorbell_attributes(ring):
     data = ring.devices()
     dev = data["authorized_doorbots"][0]

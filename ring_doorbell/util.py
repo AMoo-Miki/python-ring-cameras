@@ -60,6 +60,21 @@ def parse_datetime(datetime_str: str) -> datetime.datetime:
     return res
 
 
+def image_content_type(data: bytes | None) -> str | None:
+    """Return the media type of a Ring image by its leading bytes.
+
+    Ring returns JPEG for most cameras but a raw H.264 frame (Annex B) for some,
+    e.g. notification images from the Wired Doorbell Pro 4K.
+    """
+    if not data:
+        return None
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith((b"\x00\x00\x00\x01", b"\x00\x00\x01")):
+        return "video/h264"
+    return "application/octet-stream"
+
+
 def resolve_motion_subtype(subtype: str | None, detection_type: str | None) -> str:
     """Return the motion subtype of a push, or other_motion when unknown.
 
@@ -89,6 +104,21 @@ def get_detection_types(entry: dict[str, Any]) -> list[str]:
     if (primary := cv.get("detection_type")) and primary not in types:
         types.append(primary)
     return types
+
+
+def snapshot_timestamp_to_datetime(
+    timestamp_ms: float | None,
+) -> datetime.datetime | None:
+    """Convert a Ring snapshot millisecond epoch to a tz-aware datetime.
+
+    Returns ``None`` when the timestamp is missing or zero, which Ring uses to
+    indicate that no Snapshot Capture frame exists yet for the device.
+    """
+    if not timestamp_ms:
+        return None
+    return datetime.datetime.fromtimestamp(
+        timestamp_ms / 1000, tz=datetime.timezone.utc
+    )
 
 
 class _DeprecatedSyncApiHandler:

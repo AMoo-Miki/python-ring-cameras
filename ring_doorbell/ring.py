@@ -15,6 +15,7 @@ from ring_doorbell.exceptions import RingError
 from ring_doorbell.group import RingLightGroup
 from ring_doorbell.other import RingOther
 from ring_doorbell.stickup_cam import RingStickUpCam
+from ring_doorbell.util import snapshot_timestamp_to_datetime
 
 from .const import (
     API_URI,
@@ -24,13 +25,16 @@ from .const import (
     GROUPS_ENDPOINT,
     INTERCOM_KINDS,
     NEW_SESSION_ENDPOINT,
+    SNAPSHOT_TIMESTAMP_ENDPOINT,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
+    from datetime import datetime
 
     from ring_doorbell.auth import Auth
     from ring_doorbell.generic import RingGeneric
+    from ring_doorbell.snapshots import RingSnapshotTracker
 
 _logger = logging.getLogger(__name__)
 
@@ -50,6 +54,8 @@ class Ring:
         self.dings_data: dict[Any, Any] = {}
         self.push_dings_data: list[RingEvent] = []
         self.groups_data: dict[str, dict[str, Any]] = {}
+        # Set while a RingSnapshotTracker is running for this account
+        self.snapshot_tracker: RingSnapshotTracker | None = None
         self.init_loop = None
         self.session_refresh_time: float | None = None
 
@@ -74,6 +80,14 @@ class Ring:
             re for re in self.push_dings_data if now < re.now + re.expires_in
         ]
         self.push_dings_data.append(ring_event)
+        if self.snapshot_tracker:
+            # Never let the tracker keep other notification callbacks from running
+            try:
+                self.snapshot_tracker.handle_event(ring_event)
+            except Exception:
+                _logger.exception(
+                    "Error handling event %s for snapshots", ring_event.id
+                )
 
     async def async_create_session(self) -> None:
         """Create a new Ring session."""
@@ -181,6 +195,44 @@ class Ring:
             json=json,
             timeout=timeout,
         )
+
+    async def async_get_snapshot_timestamps(
+        self, devices: Sequence[RingDoorBell | int]
+    ) -> dict[int, datetime | None]:
+        """Return the latest snapshot capture time for multiple devices at once.
+
+        Internal: integrations should read
+        :attr:`RingSnapshotTracker.snapshot_timestamps` instead, which polls
+        this sparingly for battery cameras. Calling this every minute for
+        battery cameras was observed to make them refresh their snapshot every
+        10 minutes instead of on their configured schedule.
+
+        Issues a single POST to the snapshot timestamps endpoint with all the
+        given device ids; Ring returns one entry per device. Returns a mapping
+        of device api id to the timezone-aware capture datetime, or ``None`` for
+        devices that have no Snapshot Capture frame yet. No images are
+        downloaded.
+
+        ``devices`` may be :class:`RingDoorBell` objects, their integer api ids,
+        or a mix of both.
+        """
+        ids = [
+            device if isinstance(device, int) else device.device_api_id
+            for device in devices
+        ]
+        result: dict[int, datetime | None] = dict.fromkeys(ids)
+        if not ids:
+            return result
+        resp = await self.async_query(
+            SNAPSHOT_TIMESTAMP_ENDPOINT, method="POST", json={"doorbot_ids": ids}
+        )
+        for entry in resp.json().get("timestamps", []):
+            device_id = entry.get("doorbot_id")
+            if device_id in result:
+                result[device_id] = snapshot_timestamp_to_datetime(
+                    entry.get("timestamp")
+                )
+        return result
 
     def devices(self) -> RingDevices:
         """Get all devices."""

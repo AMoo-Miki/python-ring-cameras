@@ -249,6 +249,14 @@ class RingGeneric:
                 break
 
         self._last_history = response
+        if (tracker := self._ring.snapshot_tracker) and tracker.started:
+            # Never let the tracker break a history update
+            try:
+                tracker.handle_history(self.device_api_id, response)
+            except Exception:
+                _LOGGER.exception(
+                    "Error handling history of %s for snapshots", self.device_api_id
+                )
         return self._last_history
 
     DEPRECATED_API_QUERIES: ClassVar = {
