@@ -66,6 +66,10 @@ async def test_doorbell_attributes(ring):
     assert isinstance(await dev.async_history(limit=1, kind="motion"), list)
     assert len(await dev.async_history(kind="ding")) == 1
     assert len(await dev.async_history(limit=1, kind="motion")) == 2
+    # A package delivery ding also contains the courier's human detection
+    assert len(await dev.async_history(detection_type="package_delivery")) == 1
+    assert len(await dev.async_history(detection_type="human")) == 2
+    assert len(await dev.async_history(detection_type="vehicle")) == 0
     assert (
         len(
             await dev.async_history(

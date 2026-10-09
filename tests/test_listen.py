@@ -663,3 +663,100 @@ async def test_callbacks_survive_internal_reconnect(auth, listen_credentials):
 
     listener._receiver.callback(load_alert_v2("camera_motion", 123456782), "1")
     assert len(received) == 1
+
+
+def _push(device_id: int, push: dict) -> dict:
+    """Build a v2 FCM message from a recorded push."""
+    msg = load_alert_v2("camera_motion", device_id)
+    data = json.loads(msg["data"]["data"])
+    data["event"] = push["event"]
+    msg["data"]["data"] = json.dumps(data)
+    android_config = json.loads(msg["data"]["android_config"])
+    android_config["body"] = push["body"]
+    msg["data"]["android_config"] = json.dumps(android_config)
+    return msg
+
+
+async def test_package_delivery_pushes(auth, freezer: FrozenDateTimeFactory):
+    """Replay a real package delivery: two detections under one ding.
+
+    Ring sends one push per detection (person, then package), each with its own
+    riid, followed by a repeat of each carrying an AI description.
+    """
+    freezer.move_to("2026-10-09T03:15:06Z")
+    pushes = json.loads(load_fixture("listen/package_delivery_pushes.json"))
+    ring = Ring(auth)
+    listener = RingEventListener(ring)
+    await listener.start()
+    events: list = []
+    listener.add_notification_callback(events.append)
+
+    for i, push in enumerate(pushes):
+        listener._on_notification(_push(123456782, push), str(i))
+
+    assert [e.id for e in events] == ["7694493300000098294"] * 4
+    assert [e.kind for e in events] == ["motion"] * 4
+    assert [e.state for e in events] == [
+        "human",
+        "package_delivery",
+        "human",
+        "package_delivery",
+    ]
+    assert [e.riid[-4:] for e in events] == ["6164", "e063", "6164", "e063"]
+    assert [e.is_update for e in events] == [False, False, True, True]
+    assert [e.description_provider for e in events] == [
+        "default",
+        "default",
+        "llm",
+        "llm",
+    ]
+    assert events[1].description == (
+        "A package has been detected in your Front Door Package Zone"
+    )
+    assert events[2].description == (
+        "An Amazon delivery person is standing next to Amazon boxes."
+    )
+
+
+@pytest.mark.parametrize(
+    ("subtype", "detection_type", "expected"),
+    [
+        ("package_delivery", "package_delivery", "package_delivery"),
+        ("human", "human", "human"),
+        ("vehicle", "vehicle", "vehicle"),
+        ("motion", "motion", "other_motion"),
+        (None, "package_delivery", "package_delivery"),
+        ("loitering", "loitering", "other_motion"),
+    ],
+)
+async def test_motion_state_v2(auth, subtype, detection_type, expected):
+    ring = Ring(auth)
+    listener = RingEventListener(ring)
+    await listener.start()
+    events: list = []
+    listener.add_notification_callback(events.append)
+
+    msg = load_alert_v2("camera_motion", 123456782)
+    data = json.loads(msg["data"]["data"])
+    data["event"]["ding"]["subtype"] = subtype
+    data["event"]["ding"]["detection_type"] = detection_type
+    msg["data"]["data"] = json.dumps(data)
+    listener._on_notification(msg, "1")
+    assert [e.state for e in events] == [expected]
+    assert events[0].riid == data["event"]["riid"]
+    assert events[0].description == "There is motion at your Garden Floodcam"
+
+
+async def test_motion_state_legacy_package(auth):
+    ring = Ring(auth)
+    listener = RingEventListener(ring)
+    await listener.start()
+    events: list = []
+    listener.add_notification_callback(events.append)
+
+    msg = load_alert_v1("camera_motion", 123456782)
+    gcm_data = json.loads(msg["data"]["gcmData"])
+    gcm_data["subtype"] = "package_delivery"
+    msg["data"]["gcmData"] = json.dumps(gcm_data)
+    listener._on_notification(msg, "1")
+    assert events[0].state == "package_delivery"

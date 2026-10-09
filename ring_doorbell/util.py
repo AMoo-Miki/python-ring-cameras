@@ -13,6 +13,7 @@ from warnings import warn
 
 from typing_extensions import ParamSpec, TypeVar
 
+from ring_doorbell.const import KIND_MOTION_OTHER, MOTION_SUBTYPES
 from ring_doorbell.exceptions import RingError
 
 if TYPE_CHECKING:
@@ -57,6 +58,37 @@ def parse_datetime(datetime_str: str) -> datetime.datetime:
         )
         res = datetime.datetime.now(datetime.timezone.utc)
     return res
+
+
+def resolve_motion_subtype(subtype: str | None, detection_type: str | None) -> str:
+    """Return the motion subtype of a push, or other_motion when unknown.
+
+    Pushes carry the computer vision classification in both ``subtype`` and
+    ``detection_type``; they agree in practice, ``subtype`` is preferred.
+    """
+    for value in (subtype, detection_type):
+        if value in MOTION_SUBTYPES:
+            return value  # type: ignore[return-value]
+    return KIND_MOTION_OTHER
+
+
+def get_detection_types(entry: dict[str, Any]) -> list[str]:
+    """Return every detection type of a history entry, in detection order.
+
+    History records one entry per ding with a primary ``detection_type`` and a
+    ``detection_types`` list of every detection in it (e.g. human then
+    package_delivery). Handles both the doorbot history shape (``cv_properties``)
+    and the location history shape (``cv``).
+    """
+    cv = entry.get("cv_properties") or entry.get("cv") or {}
+    types = [
+        dt["detection_type"]
+        for dt in cv.get("detection_types") or []
+        if dt.get("detection_type")
+    ]
+    if (primary := cv.get("detection_type")) and primary not in types:
+        types.append(primary)
+    return types
 
 
 def snapshot_timestamp_to_datetime(

@@ -27,8 +27,6 @@ from ring_doorbell.const import (
     KIND_DING,
     KIND_INTERCOM_UNLOCK,
     KIND_MOTION,
-    KIND_MOTION_OTHER,
-    MOTION_SUBTYPES,
     PUSH_ACTION_DING,
     PUSH_ACTION_INTERCOM_UNLOCK,
     PUSH_ACTION_MOTION,
@@ -37,7 +35,7 @@ from ring_doorbell.const import (
 )
 from ring_doorbell.event import RingEvent, RingEventKey
 from ring_doorbell.exceptions import AuthenticationError, RingError
-from ring_doorbell.util import parse_datetime
+from ring_doorbell.util import parse_datetime, resolve_motion_subtype
 
 from .listenerconfig import RingEventListenerConfig
 
@@ -561,7 +559,7 @@ class RingEventListener:
         subtype = gcm_data["subtype"]
         if action.lower() == PUSH_ACTION_MOTION.lower():
             kind = KIND_MOTION
-            state = subtype if subtype in MOTION_SUBTYPES else KIND_MOTION_OTHER
+            state = resolve_motion_subtype(subtype, ding.get("detection_type"))
         elif action.lower() == PUSH_ACTION_DING.lower():
             kind = KIND_DING
             state = "ringing"
@@ -580,6 +578,8 @@ class RingEventListener:
             now=create_seconds,
             expires_in=DEFAULT_LISTEN_EVENT_EXPIRES_IN,
             state=state,
+            riid=ding.get("riid"),
+            description=(gcm_data.get("aps") or {}).get("alert"),
         )
 
     def _get_intercom_unlock_event(self, gcm_data: dict[str, Any]) -> RingEvent | None:
@@ -652,7 +652,7 @@ class RingEventListener:
             return None
 
         android_config = json.loads(android_config_str)
-        _logger.debug("Event data: %s", data_str)
+        _logger.debug("Event data: %s android_config: %s", data_str, android_config_str)
         data = json.loads(data_str)
         event_category = android_config["category"]
         event_kind = PUSH_NOTIFICATION_KINDS.get(event_category, "Unknown")
@@ -660,9 +660,11 @@ class RingEventListener:
         event = data["event"]
         event_id = str(event["ding"].get("id") or event["riid"])
 
-        subtype = event["ding"]["subtype"]
+        subtype = event["ding"].get("subtype")
         if event_kind == KIND_MOTION:
-            subtype = subtype if subtype in MOTION_SUBTYPES else KIND_MOTION_OTHER
+            subtype = resolve_motion_subtype(
+                subtype, event["ding"].get("detection_type")
+            )
 
         created_at = event["ding"]["created_at"]
         create_seconds = parse_datetime(created_at).timestamp()
@@ -675,6 +677,9 @@ class RingEventListener:
             now=create_seconds,
             expires_in=DEFAULT_LISTEN_EVENT_EXPIRES_IN,
             state=subtype,
+            riid=event.get("riid"),
+            description=android_config.get("body"),
+            description_provider=event.get("description_provider"),
         )
 
     def _get_legacy_ring_event(self, gcm_data: dict) -> RingEvent | None:

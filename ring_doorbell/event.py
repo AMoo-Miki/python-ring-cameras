@@ -19,6 +19,17 @@ class RingEvent:
     kind: str
     state: str
     is_update: bool = False
+    # Ring sends one push per detection: a single ding (``id``) can carry
+    # several detections, e.g. a person and then a package, each with its own
+    # notification id (``riid``). A repeat push of the same detection (same
+    # ``riid``, ``is_update`` True) typically only delivers a better
+    # ``description``.
+    riid: str | None = None
+    # Notification text: Ring's generic message ("There is a Person at your
+    # Front Door") or, with ``description_provider`` "llm" on plans that
+    # include it, an AI description of the clip.
+    description: str | None = None
+    description_provider: str | None = None
 
     def __getitem__(self, key: str) -> Any:
         """Get a value by string."""

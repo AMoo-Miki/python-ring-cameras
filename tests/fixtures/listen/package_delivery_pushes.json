@@ -1,0 +1,38 @@
+[
+    {
+        "body": "There is a Person at your Front Door",
+        "event": {
+            "ding": {"id": "7694493300000098294", "created_at": "2026-10-09T03:14:59Z", "subtype": "human", "detection_type": "human"},
+            "eventito": {"type": "human", "timestamp": 1791515699113},
+            "riid": "11111111-1111-1111-1111-11110c4bf6164",
+            "description_provider": "default"
+        }
+    },
+    {
+        "body": "A package has been detected in your Front Door Package Zone",
+        "event": {
+            "ding": {"id": "7694493300000098294", "created_at": "2026-10-09T03:15:02Z", "subtype": "package_delivery", "detection_type": "package_delivery"},
+            "eventito": {"type": "package_delivery", "timestamp": 1791515702540},
+            "riid": "22222222-2222-2222-2222-2222383de063",
+            "description_provider": "default"
+        }
+    },
+    {
+        "body": "An Amazon delivery person is standing next to Amazon boxes.",
+        "event": {
+            "ding": {"id": "7694493300000098294", "created_at": "2026-10-09T03:14:59Z", "subtype": "human", "detection_type": "human"},
+            "eventito": {"type": "human", "timestamp": 1791515699113},
+            "riid": "11111111-1111-1111-1111-11110c4bf6164",
+            "description_provider": "llm"
+        }
+    },
+    {
+        "body": "An Amazon delivery person is walking near the door.",
+        "event": {
+            "ding": {"id": "7694493300000098294", "created_at": "2026-10-09T03:15:02Z", "subtype": "package_delivery", "detection_type": "package_delivery"},
+            "eventito": {"type": "package_delivery", "timestamp": 1791515702540},
+            "riid": "22222222-2222-2222-2222-2222383de063",
+            "description_provider": "llm"
+        }
+    }
+]
