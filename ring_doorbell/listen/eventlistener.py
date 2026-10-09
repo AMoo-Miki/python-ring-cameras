@@ -20,10 +20,12 @@ from ring_doorbell.const import (
     API_URI,
     API_VERSION,
     DEFAULT_LISTEN_EVENT_EXPIRES_IN,
+    DEVICE_ALERT_STATES,
     FCM_API_KEY,
     FCM_APP_ID,
     FCM_PROJECT_ID,
     FCM_RING_SENDER_ID,
+    KIND_DEVICE_ALERT,
     KIND_DING,
     KIND_INTERCOM_UNLOCK,
     KIND_MOTION,
@@ -703,16 +705,49 @@ class RingEventListener:
             else None,
         }
 
+    def _get_device_alert_event(self, gcm_data: dict) -> RingEvent | None:
+        """Return a device_alert event for Ring's power/battery notices."""
+        action = gcm_data.get("action")
+        data = gcm_data.get("data")
+        if (
+            not isinstance(action, str)
+            or not action.startswith("com.ring.push.")
+            or not isinstance(data, dict)
+            or not isinstance(device_id := data.get("doorbot_id"), int)
+        ):
+            return None
+        if (state := DEVICE_ALERT_STATES.get(action)) is None:
+            state = action.removeprefix("com.ring.push.").lower()
+            _logger.debug("Unmapped device alert %s: %s", action, json.dumps(gcm_data))
+        sent_ms = data.get("timestamp_epoch_ms")
+        now = sent_ms / 1000 if isinstance(sent_ms, (int, float)) else time.time()
+        aps = gcm_data.get("aps") or {}
+        level = data.get("battery_level")
+        device = self._ring.get_device_by_api_id(device_id)
+        return RingEvent(
+            id=f"{state}-{int(now)}",
+            doorbot_id=device_id,
+            device_name=data.get("device_name") or (device.name if device else ""),
+            device_kind=data.get("device_kind") or (device.kind if device else ""),
+            now=now,
+            expires_in=DEFAULT_LISTEN_EVENT_EXPIRES_IN,
+            kind=KIND_DEVICE_ALERT,
+            state=state,
+            description=aps.get("alert") or aps.get("title"),
+            battery_level=level if isinstance(level, int) else None,
+        )
+
     def _get_legacy_ring_event(self, gcm_data: dict) -> RingEvent | None:
         re: RingEvent | None = None
         if "ding" in gcm_data:
             re = self._get_ding_event(gcm_data)
         elif gcm_data.get("action") == PUSH_ACTION_INTERCOM_UNLOCK:
             re = self._get_intercom_unlock_event(gcm_data)
-        elif "community_alert" not in gcm_data:
-            _logger.debug(
-                "Unexpected alert type in gcmData.  Full message is:\n%s",
-                json.dumps(gcm_data),
-            )
-            return None
+        else:
+            re = self._get_device_alert_event(gcm_data)
+            if re is None and "community_alert" not in gcm_data:
+                _logger.debug(
+                    "Unexpected alert type in gcmData.  Full message is:\n%s",
+                    json.dumps(gcm_data),
+                )
         return re

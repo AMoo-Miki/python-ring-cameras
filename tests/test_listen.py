@@ -760,3 +760,88 @@ async def test_motion_state_legacy_package(auth):
     msg["data"]["gcmData"] = json.dumps(gcm_data)
     listener._on_notification(msg, "1")
     assert events[0].state == "package_delivery"
+
+
+def _legacy(gcm_data: dict) -> dict:
+    msg = json.loads(load_fixture("listen/fcmdata_v1.json"))
+    msg["data"]["gcmData"] = json.dumps(gcm_data)
+    return msg
+
+
+# Recorded from a Garden West battery swap (device ids replaced)
+POWER_LOST = {
+    "aps": {
+        "alert": "Garden West stopped receiving power and is now in Low Power Mode."
+    },
+    "action": "com.ring.push.DEVICE_SWITCHED_TO_LOW_POWER_MODE",
+    "data": {
+        "device_name": "Garden West",
+        "device_kind": "cocoa_camera_v2",
+        "doorbot_id": 987652,
+        "location_id": "2dabf1c7-25f6-4db9-889d-de1cc2e4af06",
+    },
+}
+LOW_BATTERY = {
+    "aps": {"title": "Battery at 30% - Garden West needs charging."},
+    "action": "com.ring.push.LOW_BATTERY_ALERT",
+    "data": {
+        "doorbot_id": 987652,
+        "device_kind": "cocoa_camera_v2",
+        "device_name": "Garden West",
+        "battery_level": 30,
+        "timestamp_epoch_ms": 1791576337000,
+    },
+}
+
+
+async def test_device_alerts(auth, freezer: FrozenDateTimeFactory):
+    freezer.move_to("2026-10-09T20:05:40Z")  # when the recorded pushes arrived
+    ring = Ring(auth)
+    listener = RingEventListener(ring)
+    await listener.start()
+    events: list = []
+    listener.add_notification_callback(events.append)
+
+    listener._on_notification(_legacy(POWER_LOST), "1")
+    listener._on_notification(_legacy(LOW_BATTERY), "2")
+    listener._on_notification(_legacy(LOW_BATTERY), "3")  # Ring sends twice
+    unknown = {
+        **POWER_LOST,
+        "action": "com.ring.push.DEVICE_SWITCHED_TO_FULL_POWER_MODE",
+    }
+    listener._on_notification(_legacy(unknown), "4")
+
+    power, battery, battery_again, other = events
+    assert (power.kind, power.state, power.doorbot_id) == (
+        "device_alert",
+        "power_lost",
+        987652,
+    )
+    assert power.description == (
+        "Garden West stopped receiving power and is now in Low Power Mode."
+    )
+    assert (battery.state, battery.battery_level, battery.now) == (
+        "low_battery",
+        30,
+        1791576337.0,
+    )
+    assert battery.description == "Battery at 30% - Garden West needs charging."
+    assert battery_again.is_update is True
+    # Not mapped yet: still delivered, named after the action
+    assert other.state == "device_switched_to_full_power_mode"
+    await listener.stop()
+
+
+async def test_non_device_legacy_pushes_ignored(auth):
+    ring = Ring(auth)
+    listener = RingEventListener(ring)
+    await listener.start()
+    events: list = []
+    listener.add_notification_callback(events.append)
+    listener._on_notification(_legacy({"action": "com.ring.push.X", "data": {}}), "1")
+    listener._on_notification(_legacy({"community_alert": {}}), "2")
+    listener._on_notification(
+        _legacy({"action": "other", "data": {"doorbot_id": 1}}), "3"
+    )
+    assert events == []
+    await listener.stop()
