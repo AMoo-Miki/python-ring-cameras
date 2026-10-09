@@ -35,6 +35,8 @@ class RingEvent:
     image_uuid: str | None = None
     # When the image was taken, in epoch seconds.
     image_taken_at: float | None = None
+    # Battery percentage reported with a low_battery device alert.
+    battery_level: int | None = None
 
     def __getitem__(self, key: str) -> Any:
         """Get a value by string."""

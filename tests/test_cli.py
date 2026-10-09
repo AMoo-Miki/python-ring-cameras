@@ -268,7 +268,7 @@ async def test_listen_event_handler(mocker, auth):
         " description='There is motion at your Front Floodcam',"
         " description_provider=None,"
         " image_uuid='abcd1234-cd12-f321-123a-abcdef123456:12345678',"
-        " image_taken_at=1698140538.789709) : "
+        " image_taken_at=1698140538.789709, battery_level=None) : "
         "Currently active count = 1"
     )
     echomock.assert_called_with(exp)

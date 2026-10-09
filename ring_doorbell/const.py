@@ -23,6 +23,7 @@ class RingEventKind(Enum):
     DING = "ding"
     MOTION = "motion"
     INTERCOM_UNLOCK = "intercom_unlock"
+    DEVICE_ALERT = "device_alert"
 
 
 class RingCapability(Enum):
@@ -229,6 +230,20 @@ PUSH_NOTIFICATION_DING = "com.ring.pn.live-event.ding"
 PUSH_NOTIFICATION_MOTION = "com.ring.pn.live-event.motion"
 PUSH_NOTIFICATION_INTERCOM = "com.ring.pn.live-event.intercom"
 PUSH_NOTIFICATION_INTERCOM_UNLOCK = "com.ring.pn.intercom.virtual.unlock"
+
+# Ring's notices about a device itself (power, battery), sent as legacy pushes
+# with an action and data.doorbot_id. RingEvent.state is the mapped name below,
+# or for actions not mapped yet the lowercased action suffix, e.g.
+# "device_switched_to_full_power_mode".
+KIND_DEVICE_ALERT = "device_alert"
+DEVICE_ALERT_POWER_LOST = "power_lost"
+DEVICE_ALERT_LOW_BATTERY = "low_battery"
+DEVICE_ALERT_STATES = {
+    # "<camera> stopped receiving power and is now in Low Power Mode."
+    "com.ring.push.DEVICE_SWITCHED_TO_LOW_POWER_MODE": DEVICE_ALERT_POWER_LOST,
+    # Sent as "Battery at 30% - <camera> needs charging", with data.battery_level
+    "com.ring.push.LOW_BATTERY_ALERT": DEVICE_ALERT_LOW_BATTERY,
+}
 
 PUSH_NOTIFICATION_KINDS = {
     PUSH_ACTION_DING: KIND_DING,  # legacy
