@@ -101,6 +101,9 @@ RINGTONES_ENDPOINT = "/ringtones"
 SIREN_ENDPOINT = DOORBELLS_ENDPOINT + "/siren_{1}"
 SNAPSHOT_ENDPOINT = "/clients_api/snapshots/image/{0}"
 SNAPSHOT_TIMESTAMP_ENDPOINT = "/clients_api/snapshots/timestamps"
+# Returns a recent stored snapshot or captures a fresh one (ring-mqtt uses it)
+SNAPSHOTS_URI = "https://app-snaps.ring.com"
+SNAPSHOT_NEXT_ENDPOINT = "/snapshots/next/{0}"
 TESTSOUND_CHIME_ENDPOINT = CHIMES_ENDPOINT + "/play_sound"
 URL_DOORBELL_HISTORY = DOORBELLS_ENDPOINT + "/history"
 URL_RECORDING = "/clients_api/dings/{0}/recording"
@@ -162,6 +165,7 @@ DOORBELL_EXISTING_DURATION_MAX = 10
 # device model kinds
 CHIME_KINDS = ["chime", "chime_v2"]
 CHIME_PRO_KINDS = ["chime_pro", "chime_pro_v2"]
+CHIME_GEN2_KINDS = ["chime_v4"]
 
 DOORBELL_KINDS = ["doorbot", "doorbell", "doorbell_v3"]
 DOORBELL_2_KINDS = ["doorbell_v4", "doorbell_v5"]
@@ -171,11 +175,13 @@ DOORBELL_3_PLUS_KINDS = ["doorbell_scallop"]
 DOORBELL_PRO_KINDS = ["lpd_v1", "lpd_v2", "lpd_v3"]
 DOORBELL_PRO_2_KINDS = ["lpd_v4"]
 DOORBELL_ELITE_KINDS = ["jbox_v1"]
-DOORBELL_WIRED_KINDS = ["doorbell_graham_cracker"]
+DOORBELL_WIRED_KINDS = ["doorbell_graham_cracker", "doorbell_tahoe"]
 DOORBELL_BATTERY_KINDS = ["df_doorbell_clownfish"]
 PEEPHOLE_CAM_KINDS = ["doorbell_portal"]
-DOORBELL_GEN2_KINDS = ["cocoa_doorbell", "cocoa_doorbell_v2"]
+DOORBELL_GEN2_KINDS = ["cocoa_doorbell", "cocoa_doorbell_v2", "cocoa_doorbell_v3"]
+DOORBELL_WIRED_PLUS_GEN2_KINDS = ["cocoa_doorbell_v4w"]
 DOORBELL_PRO_4K_KINDS = ["cocoa_doorbell_v5"]
+DOORBELL_BATTERY_PRO_4K_KINDS = ["cocoa_doorbell_v6"]
 
 FLOODLIGHT_CAM_KINDS = ["hp_cam_v1", "floodlight_v2"]
 FLOODLIGHT_CAM_PRO_KINDS = ["floodlight_pro"]
@@ -183,10 +189,12 @@ FLOODLIGHT_CAM_PLUS_KINDS = ["cocoa_floodlight"]
 INDOOR_CAM_KINDS = ["stickup_cam_mini"]
 INDOOR_CAM_GEN2_KINDS = ["stickup_cam_mini_v2"]
 INDOOR_CAM_PTZ_KINDS = ["stickup_cam_mini_ptz_v1"]
+INDOOR_CAM_PLUS_KINDS = ["stickup_cam_mini_v3"]
 SPOTLIGHT_CAM_BATTERY_KINDS = ["stickup_cam_v4"]
 SPOTLIGHT_CAM_WIRED_KINDS = ["hp_cam_v2", "spotlightw_v2"]
 SPOTLIGHT_CAM_PLUS_KINDS = ["cocoa_spotlight"]
 SPOTLIGHT_CAM_PRO_KINDS = ["stickup_cam_longfin"]
+SPOTLIGHT_CAM_PRO_4K_KINDS = ["cocoa_spotlight_v2"]
 STICKUP_CAM_KINDS = ["stickup_cam", "stickup_cam_v3"]
 STICKUP_CAM_BATTERY_KINDS = ["stickup_cam_lunar"]
 STICKUP_CAM_ELITE_KINDS = ["stickup_cam_elite", "stickup_cam_wired"]
@@ -196,6 +204,8 @@ STICKUP_CAM_PRO_KINDS = ["stickup_cam_medusa"]
 OUTDOOR_CAM_PLUS_KINDS = ["cocoa_camera_v2"]
 OUTDOOR_CAM_PRO_KINDS = ["cocoa_camera_v3"]
 FLOODLIGHT_PRO_GEN2_KINDS = ["cocoa_floodlight_v2"]
+ELITE_CAM_140_KINDS = ["hexa_camera_2_v1"]
+ELITE_CAM_360_KINDS = ["hexa_camera_6_v1"]
 BEAM_KINDS = ["beams_ct200_transformer"]
 
 INTERCOM_KINDS = ["intercom_handset_audio", "intercom_handset_video"]

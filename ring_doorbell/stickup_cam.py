@@ -7,12 +7,15 @@ import logging
 from typing import ClassVar
 
 from ring_doorbell.const import (
+    ELITE_CAM_140_KINDS,
+    ELITE_CAM_360_KINDS,
     FLOODLIGHT_CAM_KINDS,
     FLOODLIGHT_CAM_PLUS_KINDS,
     FLOODLIGHT_CAM_PRO_KINDS,
     FLOODLIGHT_PRO_GEN2_KINDS,
     INDOOR_CAM_GEN2_KINDS,
     INDOOR_CAM_KINDS,
+    INDOOR_CAM_PLUS_KINDS,
     INDOOR_CAM_PTZ_KINDS,
     LIGHTS_ENDPOINT,
     MSG_ALLOWED_VALUES,
@@ -24,6 +27,7 @@ from ring_doorbell.const import (
     SIREN_ENDPOINT,
     SPOTLIGHT_CAM_BATTERY_KINDS,
     SPOTLIGHT_CAM_PLUS_KINDS,
+    SPOTLIGHT_CAM_PRO_4K_KINDS,
     SPOTLIGHT_CAM_PRO_KINDS,
     SPOTLIGHT_CAM_WIRED_KINDS,
     STICKUP_CAM_BATTERY_KINDS,
@@ -62,6 +66,8 @@ class RingStickUpCam(RingDoorBell):
             return "Indoor Cam (2nd Gen)"
         if self.kind in INDOOR_CAM_PTZ_KINDS:
             return "Pan-Tilt Indoor Cam"
+        if self.kind in INDOOR_CAM_PLUS_KINDS:
+            return "Indoor Cam Plus"
         if self.kind in SPOTLIGHT_CAM_BATTERY_KINDS:
             return "Spotlight Cam {}".format(
                 self._attrs.get("ring_cam_setup_flow", "battery").title()
@@ -74,6 +80,12 @@ class RingStickUpCam(RingDoorBell):
             return "Spotlight Cam Plus"
         if self.kind in SPOTLIGHT_CAM_PRO_KINDS:
             return "Spotlight Cam Pro"
+        if self.kind in SPOTLIGHT_CAM_PRO_4K_KINDS:
+            return "Spotlight Cam Pro 4K"
+        if self.kind in ELITE_CAM_140_KINDS:
+            return "Elite Cam 140 4K"
+        if self.kind in ELITE_CAM_360_KINDS:
+            return "Elite Cam 360 4K"
         if self.kind in STICKUP_CAM_KINDS:
             return "Stick Up Cam"
         if self.kind in STICKUP_CAM_BATTERY_KINDS:
@@ -93,7 +105,7 @@ class RingStickUpCam(RingDoorBell):
         _LOGGER.error("Unknown kind: %s", self.kind)
         return "Unknown Stickup Cam"
 
-    def has_capability(self, capability: RingCapability | str) -> bool:
+    def has_capability(self, capability: RingCapability | str) -> bool:  # noqa: PLR0911
         """Return if device has specific capability."""
         capability = (
             capability
@@ -103,13 +115,14 @@ class RingStickUpCam(RingDoorBell):
         if capability == RingCapability.HISTORY:
             return True
         if capability == RingCapability.BATTERY:
+            if self.kind in OUTDOOR_CAM_PLUS_KINDS:
+                return self._outdoor_cam_plus_has_battery()
             return self.kind in (
                 SPOTLIGHT_CAM_BATTERY_KINDS
                 + STICKUP_CAM_KINDS
                 + STICKUP_CAM_BATTERY_KINDS
                 + STICKUP_CAM_GEN3_KINDS
                 + STICKUP_CAM_PRO_KINDS
-                + OUTDOOR_CAM_PLUS_KINDS
             )
         if capability == RingCapability.LIGHT:
             return self.kind in (
@@ -121,6 +134,7 @@ class RingStickUpCam(RingDoorBell):
                 + SPOTLIGHT_CAM_WIRED_KINDS
                 + SPOTLIGHT_CAM_PLUS_KINDS
                 + SPOTLIGHT_CAM_PRO_KINDS
+                + SPOTLIGHT_CAM_PRO_4K_KINDS
             )
         if capability == RingCapability.SIREN:
             return self.kind in (
@@ -131,12 +145,16 @@ class RingStickUpCam(RingDoorBell):
                 + INDOOR_CAM_KINDS
                 + INDOOR_CAM_GEN2_KINDS
                 + INDOOR_CAM_PTZ_KINDS
+                + INDOOR_CAM_PLUS_KINDS
                 + OUTDOOR_CAM_PLUS_KINDS
                 + OUTDOOR_CAM_PRO_KINDS
                 + SPOTLIGHT_CAM_BATTERY_KINDS
                 + SPOTLIGHT_CAM_WIRED_KINDS
                 + SPOTLIGHT_CAM_PLUS_KINDS
                 + SPOTLIGHT_CAM_PRO_KINDS
+                + SPOTLIGHT_CAM_PRO_4K_KINDS
+                + ELITE_CAM_140_KINDS
+                + ELITE_CAM_360_KINDS
                 + STICKUP_CAM_BATTERY_KINDS
                 + STICKUP_CAM_ELITE_KINDS
                 + STICKUP_CAM_GEN3_KINDS
@@ -151,12 +169,16 @@ class RingStickUpCam(RingDoorBell):
                 + INDOOR_CAM_KINDS
                 + INDOOR_CAM_GEN2_KINDS
                 + INDOOR_CAM_PTZ_KINDS
+                + INDOOR_CAM_PLUS_KINDS
                 + OUTDOOR_CAM_PLUS_KINDS
                 + OUTDOOR_CAM_PRO_KINDS
                 + SPOTLIGHT_CAM_BATTERY_KINDS
                 + SPOTLIGHT_CAM_WIRED_KINDS
                 + SPOTLIGHT_CAM_PLUS_KINDS
                 + SPOTLIGHT_CAM_PRO_KINDS
+                + SPOTLIGHT_CAM_PRO_4K_KINDS
+                + ELITE_CAM_140_KINDS
+                + ELITE_CAM_360_KINDS
                 + STICKUP_CAM_KINDS
                 + STICKUP_CAM_BATTERY_KINDS
                 + STICKUP_CAM_ELITE_KINDS
@@ -164,6 +186,18 @@ class RingStickUpCam(RingDoorBell):
                 + STICKUP_CAM_PRO_KINDS
             )
         return False
+
+    def _outdoor_cam_plus_has_battery(self) -> bool:
+        """Return if an Outdoor Cam Plus has a battery.
+
+        It comes in battery and plug-in variants. Trust the health report when it
+        says either way; a camera whose battery has died stops reporting battery
+        fields altogether, so absence still counts as battery-powered.
+        """
+        health = self._attrs.get("health") or {}
+        if "battery_present" in health:
+            return bool(health["battery_present"])
+        return True
 
     @property
     def lights(self) -> str:
