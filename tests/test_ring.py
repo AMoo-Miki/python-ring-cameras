@@ -1,6 +1,7 @@
 """The tests for the Ring platform."""
 
 import asyncio
+import re
 from datetime import datetime, timezone
 
 import pytest
@@ -8,8 +9,9 @@ from freezegun.api import FrozenDateTimeFactory
 from ring_doorbell import Auth, Ring, RingError
 from ring_doorbell.const import MSG_EXISTING_TYPE, USER_AGENT
 from ring_doorbell.util import parse_datetime
+from ring_doorbell.webrtcstream import RingWebRtcStream
 
-from .conftest import json_request_kwargs, load_fixture_as_dict
+from .conftest import json_request_kwargs, load_fixture_as_dict, nojson_request_kwargs
 
 
 def test_basic_attributes(ring):
@@ -440,3 +442,138 @@ async def test_set_existing_doorbell_type(ring, aioresponses_mock):
     # Attempting to set the doorbell duration to an invalid value
     with pytest.raises(RingError, match=f"Must be within the {0}-{1}."):
         await dev.async_set_existing_doorbell_type_duration(11)
+
+
+@pytest.mark.parametrize(
+    ("family", "kind", "model", "capabilities", "not_capabilities"),
+    [
+        ("chimes", "chime_v4", "Chime (2nd Gen)", ["volume"], ["video"]),
+        (
+            "doorbots",
+            "cocoa_doorbell_v5",
+            "Wired Doorbell Pro 4K",
+            ["video", "motion_detection", "ding"],
+            ["battery"],
+        ),
+        (
+            "doorbots",
+            "cocoa_doorbell_v6",
+            "Battery Doorbell Pro 4K",
+            ["video", "motion_detection", "ding", "battery"],
+            [],
+        ),
+        (
+            "doorbots",
+            "cocoa_doorbell_v4w",
+            "Wired Doorbell Plus (2nd Gen)",
+            ["video", "ding", "pre_roll"],
+            ["battery"],
+        ),
+        ("doorbots", "doorbell_tahoe", "Doorbell Wired", ["video", "ding"], []),
+        (
+            "doorbots",
+            "cocoa_doorbell_v3",
+            "Doorbell (2nd Gen)",
+            ["video", "ding", "battery"],
+            [],
+        ),
+        (
+            "stickup_cams",
+            "stickup_cam_mini_v3",
+            "Indoor Cam Plus",
+            ["video", "motion_detection", "siren"],
+            ["battery", "light"],
+        ),
+        (
+            "stickup_cams",
+            "cocoa_spotlight_v2",
+            "Spotlight Cam Pro 4K",
+            ["video", "light", "siren"],
+            [],
+        ),
+        (
+            "stickup_cams",
+            "hexa_camera_2_v1",
+            "Elite Cam 140 4K",
+            ["video", "siren"],
+            ["battery", "light"],
+        ),
+        (
+            "stickup_cams",
+            "hexa_camera_6_v1",
+            "Elite Cam 360 4K",
+            ["video", "siren"],
+            ["battery", "light"],
+        ),
+    ],
+)
+def test_device_kinds(ring, family, kind, model, capabilities, not_capabilities):
+    dev = ring.devices()[family][0]
+    dev._attrs["kind"] = kind
+    assert dev.model == model
+    for capability in capabilities:
+        assert dev.has_capability(capability) is True, capability
+    for capability in not_capabilities:
+        assert dev.has_capability(capability) is False, capability
+
+
+@pytest.mark.parametrize(
+    ("health", "has_battery"),
+    [
+        ({"battery_present": True}, True),
+        ({"battery_present": False}, False),  # plug-in variant
+        ({}, True),  # dead battery: nothing reported
+        (None, True),
+    ],
+)
+def test_outdoor_cam_plus_battery(ring, health, has_battery):
+    dev = ring.devices()["stickup_cams"][0]
+    dev._attrs["kind"] = "cocoa_camera_v2"
+    dev._attrs["health"] = health
+    assert dev.model == "Outdoor Cam Plus"
+    assert dev.has_capability("battery") is has_battery
+
+
+async def test_take_snapshot(ring, aioresponses_mock, freezer: FrozenDateTimeFactory):
+    freezer.move_to("2026-01-01 00:00:01")
+    dev = ring.devices()["doorbots"][0]
+    url = f"https://app-snaps.ring.com/snapshots/next/{dev.device_api_id}"
+    pattern = re.compile(r"^https://app-snaps\.ring\.com/.*$")
+
+    aioresponses_mock.get(pattern, body=b"\xff\xd8jpeg", content_type="image/jpeg")
+    assert await dev.async_take_snapshot() == b"\xff\xd8jpeg"
+    kwargs = nojson_request_kwargs()
+    kwargs["params"] = {
+        "after-ms": (1767225601 - 30) * 1000,
+        "max-wait-ms": 10_000,
+        "extras": "force",
+    }
+    kwargs["timeout"] = 11
+    aioresponses_mock.assert_called_with(url=url, method="GET", **kwargs)
+
+    aioresponses_mock.get(pattern, body=b"\xff\xd8jpeg", content_type="image/jpeg")
+    await dev.async_take_snapshot(max_age=0, max_wait=1)
+    kwargs["params"] = {
+        "after-ms": 1767225601 * 1000,
+        "max-wait-ms": 1_000,
+        "extras": "force",
+    }
+    kwargs["timeout"] = 2
+    aioresponses_mock.assert_called_with(url=url, method="GET", **kwargs)
+
+    # Ring answers 404 when no snapshot arrives within max_wait
+    aioresponses_mock.get(pattern, status=404)
+    with pytest.raises(RingError):
+        await dev.async_take_snapshot(max_age=0, max_wait=1)
+
+
+async def test_webrtc_close_from_reader_task(ring):
+    """Closing from inside the reader task must not await the task itself."""
+    stream = RingWebRtcStream(ring, 12345)
+
+    async def _reader() -> None:
+        stream.read_task = asyncio.current_task()
+        await stream._close(closed_by_self=False)
+
+    await asyncio.create_task(_reader())
+    assert stream.read_task is None

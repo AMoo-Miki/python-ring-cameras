@@ -19,6 +19,7 @@ from ring_doorbell.const import (
     DOORBELL_3_PLUS_KINDS,
     DOORBELL_4_KINDS,
     DOORBELL_BATTERY_KINDS,
+    DOORBELL_BATTERY_PRO_4K_KINDS,
     DOORBELL_ELITE_KINDS,
     DOORBELL_EXISTING_DURATION_MAX,
     DOORBELL_EXISTING_DURATION_MIN,
@@ -31,6 +32,7 @@ from ring_doorbell.const import (
     DOORBELL_VOL_MAX,
     DOORBELL_VOL_MIN,
     DOORBELL_WIRED_KINDS,
+    DOORBELL_WIRED_PLUS_GEN2_KINDS,
     DOORBELLS_ENDPOINT,
     FILE_EXISTS,
     HEALTH_DOORBELL_ENDPOINT,
@@ -44,7 +46,9 @@ from ring_doorbell.const import (
     PEEPHOLE_CAM_KINDS,
     SETTINGS_ENDPOINT,
     SNAPSHOT_ENDPOINT,
+    SNAPSHOT_NEXT_ENDPOINT,
     SNAPSHOT_TIMESTAMP_ENDPOINT,
+    SNAPSHOTS_URI,
     URL_RECORDING,
     URL_RECORDING_SHARE_PLAY,
     RingCapability,
@@ -113,6 +117,10 @@ class RingDoorBell(RingGeneric):
             return "Peephole Cam"
         if self.kind in DOORBELL_PRO_4K_KINDS:
             return "Wired Doorbell Pro 4K"
+        if self.kind in DOORBELL_BATTERY_PRO_4K_KINDS:
+            return "Battery Doorbell Pro 4K"
+        if self.kind in DOORBELL_WIRED_PLUS_GEN2_KINDS:
+            return "Wired Doorbell Plus (2nd Gen)"
         return "Unknown Doorbell"
 
     def has_capability(self, capability: RingCapability | str) -> bool:  # noqa: PLR0911
@@ -131,12 +139,13 @@ class RingDoorBell(RingGeneric):
                 + DOORBELL_4_KINDS
                 + DOORBELL_GEN2_KINDS
                 + DOORBELL_BATTERY_KINDS
+                + DOORBELL_BATTERY_PRO_4K_KINDS
                 + PEEPHOLE_CAM_KINDS
             )
         if capability == RingCapability.KNOCK:
             return self.kind in PEEPHOLE_CAM_KINDS
         if capability == RingCapability.PRE_ROLL:
-            return self.kind in DOORBELL_3_PLUS_KINDS
+            return self.kind in DOORBELL_3_PLUS_KINDS + DOORBELL_WIRED_PLUS_GEN2_KINDS
         if capability == RingCapability.VOLUME:
             return True
         if capability == RingCapability.HISTORY:
@@ -155,7 +164,9 @@ class RingDoorBell(RingGeneric):
                 + DOORBELL_PRO_KINDS
                 + DOORBELL_PRO_2_KINDS
                 + DOORBELL_PRO_4K_KINDS
+                + DOORBELL_BATTERY_PRO_4K_KINDS
                 + DOORBELL_WIRED_KINDS
+                + DOORBELL_WIRED_PLUS_GEN2_KINDS
                 + DOORBELL_BATTERY_KINDS
                 + DOORBELL_GEN2_KINDS
                 + DOORBELL_ELITE_KINDS
@@ -464,6 +475,35 @@ class RingDoorBell(RingGeneric):
             SNAPSHOT_ENDPOINT.format(self._attrs.get("id"))
         )
         return resp.content, captured_at
+
+    async def async_take_snapshot(
+        self, max_age: int = 30, max_wait: int = 10, filename: str | None = None
+    ) -> bytes | None:
+        """Return a snapshot no older than ``max_age`` seconds, taking one if needed.
+
+        One request: Ring returns a stored snapshot newer than ``max_age`` straight
+        away, otherwise it captures a fresh one and waits up to ``max_wait``
+        seconds for it. Unlike async_get_snapshot there is no polling, and unlike
+        async_get_latest_snapshot the image can be forced fresh. Capturing wakes
+        battery cameras. Raises RingError if no snapshot arrives in time (Ring
+        answers 404; a larger ``max_wait`` may help).
+        """
+        params = {
+            "after-ms": int(time.time() - max_age) * 1000,
+            "max-wait-ms": max_wait * 1000,
+            "extras": "force",
+        }
+        resp = await self._ring.async_query(
+            SNAPSHOT_NEXT_ENDPOINT.format(self._attrs.get("id")),
+            extra_params=params,
+            base_uri=SNAPSHOTS_URI,
+            timeout=max_wait + 1,
+        )
+        if filename:
+            async with aiofiles.open(filename, "wb") as jpg:
+                await jpg.write(resp.content)
+            return None
+        return resp.content
 
     def _motion_detection_state(self) -> bool | None:
         if settings := self._attrs.get("settings"):
