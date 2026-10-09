@@ -580,6 +580,9 @@ class RingEventListener:
             state=state,
             riid=ding.get("riid"),
             description=(gcm_data.get("aps") or {}).get("alert"),
+            # Legacy pushes: assumed to be the same uuid as v2's img.snapshot_uuid
+            image_uuid=ding.get("image_uuid"),
+            image_taken_at=create_seconds if ding.get("image_uuid") else None,
         )
 
     def _get_intercom_unlock_event(self, gcm_data: dict[str, Any]) -> RingEvent | None:
@@ -680,7 +683,25 @@ class RingEventListener:
             riid=event.get("riid"),
             description=android_config.get("body"),
             description_provider=event.get("description_provider"),
+            **self._get_image_fields(msg_data),
         )
+
+    @staticmethod
+    def _get_image_fields(msg_data: dict) -> dict[str, Any]:
+        """Return the image_uuid/image_taken_at of a push's ``img`` payload."""
+        try:
+            img = json.loads(msg_data.get("img") or "{}")
+        except (TypeError, ValueError):
+            return {}
+        if not isinstance(img, dict) or not (uuid := img.get("snapshot_uuid")):
+            return {}
+        taken_ms = img.get("timestamp")
+        return {
+            "image_uuid": str(uuid),
+            "image_taken_at": taken_ms / 1000
+            if isinstance(taken_ms, (int, float)) and taken_ms > 0
+            else None,
+        }
 
     def _get_legacy_ring_event(self, gcm_data: dict) -> RingEvent | None:
         re: RingEvent | None = None

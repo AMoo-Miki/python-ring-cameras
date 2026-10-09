@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 
     from ring_doorbell.auth import Auth
     from ring_doorbell.generic import RingGeneric
+    from ring_doorbell.snapshots import RingSnapshotTracker
 
 _logger = logging.getLogger(__name__)
 
@@ -53,6 +54,8 @@ class Ring:
         self.dings_data: dict[Any, Any] = {}
         self.push_dings_data: list[RingEvent] = []
         self.groups_data: dict[str, dict[str, Any]] = {}
+        # Set while a RingSnapshotTracker is running for this account
+        self.snapshot_tracker: RingSnapshotTracker | None = None
         self.init_loop = None
         self.session_refresh_time: float | None = None
 
@@ -77,6 +80,14 @@ class Ring:
             re for re in self.push_dings_data if now < re.now + re.expires_in
         ]
         self.push_dings_data.append(ring_event)
+        if self.snapshot_tracker:
+            # Never let the tracker keep other notification callbacks from running
+            try:
+                self.snapshot_tracker.handle_event(ring_event)
+            except Exception:
+                _logger.exception(
+                    "Error handling event %s for snapshots", ring_event.id
+                )
 
     async def async_create_session(self) -> None:
         """Create a new Ring session."""
@@ -190,6 +201,12 @@ class Ring:
     ) -> dict[int, datetime | None]:
         """Return the latest snapshot capture time for multiple devices at once.
 
+        Internal: integrations should read
+        :attr:`RingSnapshotTracker.snapshot_timestamps` instead, which polls
+        this sparingly for battery cameras. Calling this every minute for
+        battery cameras was observed to make them refresh their snapshot every
+        10 minutes instead of on their configured schedule.
+
         Issues a single POST to the snapshot timestamps endpoint with all the
         given device ids; Ring returns one entry per device. Returns a mapping
         of device api id to the timezone-aware capture datetime, or ``None`` for
@@ -197,9 +214,7 @@ class Ring:
         downloaded.
 
         ``devices`` may be :class:`RingDoorBell` objects, their integer api ids,
-        or a mix of both. As with the per-device call, Ring treats this POST as
-        a rate-limited snapshot-refresh request (about every 30s for wired,
-        every 10 minutes for battery cameras).
+        or a mix of both.
         """
         ids = [
             device if isinstance(device, int) else device.device_api_id

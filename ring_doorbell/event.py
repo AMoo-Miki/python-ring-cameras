@@ -30,6 +30,11 @@ class RingEvent:
     # include it, an AI description of the clip.
     description: str | None = None
     description_provider: str | None = None
+    # Image Ring attached to the notification: fetch it with
+    # RingDoorBell.async_get_event_image() soon, Ring expires it within minutes.
+    image_uuid: str | None = None
+    # When the image was taken, in epoch seconds.
+    image_taken_at: float | None = None
 
     def __getitem__(self, key: str) -> Any:
         """Get a value by string."""

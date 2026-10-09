@@ -266,7 +266,9 @@ async def test_listen_event_handler(mocker, auth):
         " expires_in=180, kind='motion', state='human', is_update=False,"
         " riid='0123456789abcdef0123456789abcdef',"
         " description='There is motion at your Front Floodcam',"
-        " description_provider=None) : "
+        " description_provider=None,"
+        " image_uuid='abcd1234-cd12-f321-123a-abcdef123456:12345678',"
+        " image_taken_at=1698140538.789709) : "
         "Currently active count = 1"
     )
     echomock.assert_called_with(exp)

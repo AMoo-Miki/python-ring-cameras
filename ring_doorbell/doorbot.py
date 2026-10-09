@@ -48,6 +48,7 @@ from ring_doorbell.const import (
     SNAPSHOT_ENDPOINT,
     SNAPSHOT_NEXT_ENDPOINT,
     SNAPSHOT_TIMESTAMP_ENDPOINT,
+    SNAPSHOT_UUID_ENDPOINT,
     SNAPSHOTS_URI,
     URL_RECORDING,
     URL_RECORDING_SHARE_PLAY,
@@ -454,15 +455,26 @@ class RingDoorBell(RingGeneric):
         Unlike :meth:`async_get_snapshot`, this does not loop/sleep waiting for
         a newer frame, so the caller decides when and how often it runs. It
         returns whatever frame is currently available, i.e. the same image
-        served as the camera snapshot/entity picture. The timestamps POST is
-        still treated by Ring as a rate-limited snapshot-refresh request (about
-        every 30s for wired, every 10 minutes for battery cameras).
+        served as the camera snapshot/entity picture.
+
+        While a :class:`~ring_doorbell.snapshots.RingSnapshotTracker` is
+        running this is served from its cache instead: no timestamps request,
+        and at most one image download per new snapshot, so it can be called
+        as often as needed. Without one, avoid calling it often for battery
+        cameras: the timestamps request is documented as a read, but battery
+        cameras polled every minute were observed refreshing their snapshot
+        every 10 minutes instead of on their configured schedule.
 
         Returns an ``(image, captured_at)`` tuple where ``captured_at`` is a
         timezone-aware datetime. Both elements are ``None`` when no snapshot
         exists yet, e.g. for battery or snapshot-only cameras, or when
         Snapshot Capture is paused because the device is asleep or low.
         """
+        if (tracker := self._ring.snapshot_tracker) and tracker.started:
+            if self.device_api_id in tracker.snapshot_timestamps:
+                return await tracker.async_get_snapshot_image(self.device_api_id)
+            if self.operating_on_battery:
+                return None, None  # not known yet; do not ask Ring directly
         url = SNAPSHOT_TIMESTAMP_ENDPOINT
         payload = {"doorbot_ids": [self._attrs.get("id")]}
         resp = await self._ring.async_query(url, method="POST", json=payload)
@@ -475,6 +487,56 @@ class RingDoorBell(RingGeneric):
             SNAPSHOT_ENDPOINT.format(self._attrs.get("id"))
         )
         return resp.content, captured_at
+
+    async def async_get_stored_snapshot(self) -> bytes | None:
+        """Download the latest stored Snapshot Capture image.
+
+        A single read of the stored image, without asking for its timestamp.
+        """
+        resp = await self._ring.async_query(
+            SNAPSHOT_ENDPOINT.format(self._attrs.get("id"))
+        )
+        return resp.content or None
+
+    async def async_get_event_image(self, image_uuid: str) -> bytes | None:
+        """Download the image Ring attached to a notification.
+
+        ``image_uuid`` is :attr:`RingEvent.image_uuid`. Ring keeps these only
+        for minutes, so fetch it as the notification arrives; returns ``None``
+        once it has expired. Most cameras return a JPEG; some (e.g. the Wired
+        Doorbell Pro 4K) return a raw H.264 frame, see
+        :func:`ring_doorbell.util.image_content_type`.
+        """
+        resp = await self._ring.async_query(
+            SNAPSHOT_UUID_ENDPOINT, extra_params={"uuid": image_uuid}
+        )
+        return resp.content or None
+
+    @property
+    def operating_on_battery(self) -> bool:
+        """Return True when the camera runs on its battery.
+
+        Solar-charged cameras count as battery: they report power mode
+        "battery" (the panel only charges the battery).
+        """
+        power_mode = (self._attrs.get("settings") or {}).get("power_mode")
+        if power_mode is not None:
+            return power_mode != "wired"
+        return self.has_capability(RingCapability.BATTERY)
+
+    @property
+    def snapshot_capture_enabled(self) -> bool | None:
+        """Return whether Snapshot Capture is on, or None if not reported."""
+        lite = (self._attrs.get("settings") or {}).get("lite_24x7") or {}
+        enabled = lite.get("enabled")
+        return enabled if isinstance(enabled, bool) else None
+
+    @property
+    def snapshot_interval(self) -> int | None:
+        """Return the configured Snapshot Capture interval in seconds, if known."""
+        lite = (self._attrs.get("settings") or {}).get("lite_24x7") or {}
+        interval = lite.get("frequency_secs")
+        return interval if isinstance(interval, int) and interval > 0 else None
 
     async def async_take_snapshot(
         self, max_age: int = 30, max_wait: int = 10, filename: str | None = None

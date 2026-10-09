@@ -101,6 +101,8 @@ RINGTONES_ENDPOINT = "/ringtones"
 SIREN_ENDPOINT = DOORBELLS_ENDPOINT + "/siren_{1}"
 SNAPSHOT_ENDPOINT = "/clients_api/snapshots/image/{0}"
 SNAPSHOT_TIMESTAMP_ENDPOINT = "/clients_api/snapshots/timestamps"
+# Image attached to a push notification; Ring expires it within minutes
+SNAPSHOT_UUID_ENDPOINT = "/clients_api/snapshots/uuid"
 # Returns a recent stored snapshot or captures a fresh one (ring-mqtt uses it)
 SNAPSHOTS_URI = "https://app-snaps.ring.com"
 SNAPSHOT_NEXT_ENDPOINT = "/snapshots/next/{0}"
