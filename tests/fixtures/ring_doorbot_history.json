@@ -5,6 +5,13 @@
     "favorite": false,
     "id": 987654321,
     "kind": "motion",
+    "cv_properties": {
+        "detection_type": "package_delivery",
+        "detection_types": [
+            {"detection_type": "human", "verified_timestamps": [1488726221007]},
+            {"detection_type": "package_delivery", "verified_timestamps": [1488726229778]}
+        ]
+    },
     "recording": {"status": "ready"},
     "snapshot_url": ""
 },
@@ -15,6 +22,12 @@
     "favorite": false,
     "id": 9876543212,
     "kind": "motion",
+    "cv_properties": {
+        "detection_type": "human",
+        "detection_types": [
+            {"detection_type": "human", "verified_timestamps": [1488729821007]}
+        ]
+    },
     "recording": {"status": "ready"},
     "snapshot_url": ""
 },

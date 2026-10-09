@@ -11,6 +11,7 @@ import pytz
 
 from ring_doorbell.const import URL_DOORBELL_HISTORY, RingCapability
 from ring_doorbell.util import (
+    get_detection_types,
     parse_datetime,
 )
 
@@ -166,6 +167,7 @@ class RingGeneric:
         limit: int = 30,
         timezone: str | None = None,
         kind: str | None = None,
+        detection_type: str | None = None,
         enforce_limit: bool = False,
         older_than: int | None = None,
         retry: int = 8,
@@ -177,6 +179,9 @@ class RingGeneric:
         :param limit: specify number of objects to be returned
         :param timezone: determine which timezone to convert data objects
         :param kind: filter by kind (ding, motion, on_demand)
+        :param detection_type: filter by detection type, e.g. human, vehicle or
+            package_delivery. Matches any detection in the ding, so a package
+            delivery also matches ``human`` for the courier.
         :param enforce_limit: when True, this will enforce the limit and kind
         :param older_than: return older objects than the passed event_id
         :param retry: determine the max number of attempts to archive the limit
@@ -203,6 +208,12 @@ class RingGeneric:
             # cherrypick only the selected kind events
             if kind:
                 response = list(filter(lambda array: array["kind"] == kind, response))
+            if detection_type:
+                response = [
+                    entry
+                    for entry in response
+                    if detection_type in get_detection_types(entry)
+                ]
 
             if convert_timezone:
                 # convert for specific timezone
